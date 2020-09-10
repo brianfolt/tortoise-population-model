@@ -1,0 +1,174 @@
+model {
+
+  #-----------------------------------------
+  ### Indexing:
+  # j = site
+  # t = year
+
+  ### Parameters:
+  # phi.j: juvenile apparent survival probability
+  # phi.f: female apparent survival probability
+  # phi.m: male apparent survival probability
+  # tau.jf: transition probability for juveniles to adult females
+  # tau.jm: transition probability for juveniles to adult males
+  # p.j: juvenile recapture probability
+  # p.f: female recapture probability
+  # p.m: male recapture probability
+
+  ### States (S):
+  # 1 alive as juvenile
+  # 2 alive as female
+  # 3 alive as male
+  # 4 dead
+
+  ### Observations (O): 
+  # 1 seen as juvenile 
+  # 2 seen as female
+  # 3 seen as male
+  # 4 not seen
+  #----------------------------------------
+
+  ### Priors and constraints    
+  for(j in 1:nsites){
+    for (t in 1:(nyears-1)){
+      logit(phi.j[j,t]) <- mu.phiJ[j] + eps.J[j,t]
+      logit(phi.f[j,t]) <- mu.phiF[j] + eps.F[j,t]
+      logit(phi.m[j,t]) <- mu.phiM[j] + eps.M[j,t]
+
+      logit(tau.jf[j,t]) <- mu.tauJF[j] + eps.tauF[j,t]
+      logit(tau.jm[j,t]) <- mu.tauJM[j] + eps.tauM[j,t]
+    }
+
+    for(t in 1:nyears){
+      # survey[j,t] == 1 if site j was sampled in year j and 0 otherwise
+      # constrains p=0 in years without survey effort
+      p.j[j,t] <- mean.pJ[t]*surveyCMR[j,t]
+      p.f[j,t] <- mean.pF[t]*surveyCMR[j,t]
+      p.m[j,t] <- mean.pM[t]*surveyCMR[j,t]
+    }
+  }
+
+  ### Fixed effect of site on survival and transition probabilities
+
+  for(j in 1:nsites){
+    mean.phiJ[j] ~ dbeta(1,1)
+    mu.phiJ[j] <- log(mean.phiJ[j]/(1-mean.phiJ[j]))
+
+    mean.phiF[j] ~ dbeta(1,1)
+    mu.phiF[j] <- log(mean.phiF[j]/(1-mean.phiF[j]))
+
+    mean.phiM[j] ~ dbeta(1,1)
+    mu.phiM[j] <- log(mean.phiM[j]/(1-mean.phiM[j]))
+
+    mean.tauJF[j] ~ dbeta(1,1)
+    mu.tauJF[j] <- log(mean.tauJF[j]/(1-mean.tauJF[j]))
+
+    mean.tauJM[j] ~ dbeta(1,1)
+    mu.tauJM[j] <- log(mean.tauJM[j]/(1-mean.tauJM[j]))
+
+  }
+
+  ### Temporal variance
+  ### Independent annual random effects on survival and transition probabilities
+
+  for(j in 1:nsites){
+    for(t in 1:nyears){
+      eps.J[j,t] ~ dnorm(0, tau.J[j])
+      eps.F[j,t] ~ dnorm(0, tau.F[j])
+      eps.M[j,t] ~ dnorm(0, tau.M[j])
+
+      eps.tauF[j,t] ~ dnorm(0, tau.tauF[j])
+      eps.tauM[j,t] ~ dnorm(0, tau.tauM[j])
+    }
+  }
+
+  for(j in 1:nsites){
+    sigma.J[j] ~ dunif(0, 10)
+    tau.J[j] <- pow(sigma.J[j], -2)
+
+    sigma.F[j] ~ dunif(0, 10)
+    tau.F[j] <- pow(sigma.F[j], -2)
+
+    sigma.M[j] ~ dunif(0, 10)
+    tau.M[j] <- pow(sigma.M[j], -2)
+
+    sigma.tauF[j] ~ dunif(0, 10)
+    tau.tauF[j] <- pow(sigma.tauF[j], -2)
+
+    sigma.tauM[j] ~ dunif(0, 10)
+    tau.tauM[j] <- pow(sigma.tauM[j], -2)
+  }
+
+  ### Detection probability
+
+  overall.mean.pJ ~ dbeta(1,1)
+  overall.mean.pF ~ dbeta(1,1)
+  overall.mean.pM ~ dbeta(1,1)
+
+  for(t in 1:nyears){
+    #    mean.pJ[t] ~ dbeta(3, 3)
+    #    mean.pF[t] ~ dbeta(3, 3)
+    #    mean.pM[t] ~ dbeta(3, 3)
+
+    mean.pJ[t] <- overall.mean.pJ
+    mean.pF[t] <- overall.mean.pF
+    mean.pM[t] <- overall.mean.pM
+  }
+
+  ### State and observation matrices
+
+  for (i in 1:nind){
+    for (t in f[i]:(nyears-1)){
+
+      ps[1,i,t,1] <- phi.j[site[i],t]*(1-tau.jf[site[i],t])*(1-tau.jm[site[i],t])
+      ps[1,i,t,2] <- phi.j[site[i],t]*tau.jf[site[i],t]
+      ps[1,i,t,3] <- phi.j[site[i],t]*tau.jm[site[i],t]
+      ps[1,i,t,4] <- 1-(phi.j[site[i],t]-phi.j[site[i],t]*tau.jf[site[i],t]*tau.jm[site[i],t])
+      ps[2,i,t,1] <- 0
+      ps[2,i,t,2] <- phi.f[site[i],t]
+      ps[2,i,t,3] <- 0
+      ps[2,i,t,4] <- 1-phi.f[site[i],t]      
+      ps[3,i,t,1] <- 0
+      ps[3,i,t,2] <- 0
+      ps[3,i,t,3] <- phi.m[site[i],t]
+      ps[3,i,t,4] <- 1-phi.m[site[i],t]
+      ps[4,i,t,1] <- 0
+      ps[4,i,t,2] <- 0
+      ps[4,i,t,3] <- 0
+      ps[4,i,t,4] <- 1
+    }
+
+    for(t in f[i]:nyears){
+
+      # Define probabilities of O(t) given S(t)
+      po[1,i,t,1] <- p.j[site[i],t]
+      po[1,i,t,2] <- 0
+      po[1,i,t,3] <- 0
+      po[1,i,t,4] <- 1-p.j[site[i],t]
+      po[2,i,t,1] <- 0
+      po[2,i,t,2] <- p.f[site[i],t]
+      po[2,i,t,3] <- 0
+      po[2,i,t,4] <- 1-p.f[site[i],t]
+      po[3,i,t,1] <- 0
+      po[3,i,t,2] <- 0
+      po[3,i,t,3] <- p.m[site[i],t]
+      po[3,i,t,4] <- 1-p.m[site[i],t]
+      po[4,i,t,1] <- 0
+      po[4,i,t,2] <- 0
+      po[4,i,t,3] <- 0
+      po[4,i,t,4] <- 1
+    } #t
+  } #i
+
+  ### State-space model likelihood
+  for (i in 1:nind){
+    # Define latent state at first capture
+    z[i,f[i]] <- y[i,f[i]]
+    for (t in (f[i]+1):nyears){
+      # State equation: draw S(t) given S(t-1)
+      z[i,t] ~ dcat(ps[z[i,t-1], i, t-1,])
+      # Observation equation: draw O(t) given S(t)
+      y[i,t] ~ dcat(po[z[i,t], i, t,])
+    } #t
+  } #i
+}
