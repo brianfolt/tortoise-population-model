@@ -3,7 +3,7 @@
 ##########    Modeling population viability of gopher tortoises   ##########
 ##########      in Conecuh National Forest, Alabama using         ##########
 ##########            population projection models                ##########
-##########               B Folt, September 2020                   ##########
+##########               B Folt, October 2020                     ##########
 ############################################################################
 ############################################################################
 
@@ -97,9 +97,10 @@ plot = ggplot2.histogram(data=result, xName='CLmax',
   facetingVarNames=c("Site","Era"), 
   facetingRect=list(lineType="solid",lineColor="black"),
   backgroundColor="white")
-  
-(plot = ggplot2.customize(plot, xtitle="        Carapace length (cm)",
-  ytitle="Number observed", legendTitle="Age class"))
+plot = ggplot2.customize(plot, xtitle="        Carapace length (cm)",
+  ytitle="Number observed", legendTitle="Age class")
+(plot = plot + 
+    theme(panel.grid.major=element_blank(), panel.grid.minor=element_blank()))
 
 
 # Proportion of males, females, and juveniles
@@ -315,25 +316,39 @@ ggviolin(PHI, x = "Site", y = "Phi", combine=TRUE, facet.by="Stage",
          ylim=c(0.3,1), lty=2, ylab=expression(paste("Apparent survival probability (", phi, ") ")),
          add="mean_sd")
 
-library(clipr)
-write_clip(conecuh$summary[19:30,c(1,3,7)])
-write_clip(conecuh$summary[c(19,25,20,26,21,27,22,28,23,29,24,30),c(1,3,7)])
+
+# Create tauJF and tauJM by multiplying tauJA*pFemale and tauJA*(1-pFemale)
+str(conecuh)
+tauJF = conecuh$sims.list$mean.tauJA*conecuh$sims.list$mean.pFemale
+tauJM = conecuh$sims.list$mean.tauJA*(1-conecuh$sims.list$mean.pFemale)
+
+TauJF = matrix(NA,6,4,dimnames=list(c(1:6),c("Mean","SD","LCL","UCL")))
+for (i in 1:6){
+  site = tauJF[,i]
+  TauJF[i,1] = mean(site)
+  TauJF[i,2] = sd(site)
+  TauJF[i,3] = apply(data.frame(site),2,quantile,probs=c(0.025))
+  TauJF[i,4] = apply(data.frame(site),2,quantile,probs=c(0.975))
+}
+
+TauJM = matrix(NA,6,4,dimnames=list(c(1:6),c("Mean","SD","LCL","UCL")))
+for (i in 1:6){
+  site = tauJM[,i]
+  TauJM[i,1] = mean(site)
+  TauJM[i,2] = sd(site)
+  TauJM[i,3] = apply(data.frame(site),2,quantile,probs=c(0.025))
+  TauJM[i,4] = apply(data.frame(site),2,quantile,probs=c(0.975))
+}
+
+#library(clipr)
+write_clip(TauJF)
+write_clip(TauJM)
   # Copy and paste transition probability estimates into manuscript prep Excel file
   # to make Supplementary Table 3
 
-# Among-site means and CI
-mean(conecuh$summary[19:24,1]) # Female mean
-mean(conecuh$summary[19:24,3]) # Female low CI
-mean(conecuh$summary[19:24,7]) # Female low CI
-
-mean(conecuh$summary[25:30,1]) # Male mean
-mean(conecuh$summary[25:30,3]) # Male low CI
-mean(conecuh$summary[25:30,7]) # Male low CI
-
-
 
 ########## Section 3)
-########## Construct matrix population projection model
+########## Construct a population projection model
 
 ## Define number of replicate simulations and time-period for population project
 r = 1000      # Number of simulation replicates
@@ -346,35 +361,33 @@ Pext = matrix(0,r,t)  # Probability of quasi-extinction
 ## Summarize demographic estimates for study populations
 s=6 # Number of research sites
 
-params = matrix(NA, nrow=s, ncol=11)
+params = matrix(NA, nrow=s, ncol=10)
 dimnames(params) = list(c("Site1","Site2","Site3","Site4","Site5","Site6"), 
-                        c("phiH","phiJ","phiF","phiM","gJF","gJM","f","nJF","nJM","nF","nM"))
+                        c("phiH","phiJ","phiF","phiM","gJF","gJM","f","nJ","nF","nM"))
 params[,1] <- rep(0.15,6)                 # Hatchling survival
 params[,2] <- conecuh$summary[1:6,1]      # Juvenile survival
 params[,3] <- conecuh$summary[7:12,1]     # Female survival
 params[,4] <- conecuh$summary[13:18,1]    # Male survival
-params[,5] <- conecuh$summary[19:24,1]    # Transition probability from j fem - ad female
-params[,6] <- conecuh$summary[25:30,1]    # Transition probability from j male - ad male
+params[,5] <- TauJF[,1]    # Transition probability from j - ad female
+params[,6] <- TauJM[,1]    # Transition probability from j - ad male
 params[,7] <- rep(5.4,6)                  # Mean fecundity
-params[,8] <- c(3,2,2,5,1,3)        # Initial abundance of juv females
-params[,9] <- c(3,2,2,5,1,3)        # Initial abundance of juv males
-params[,10] <- c(10,7,9,16,5,8)     # Initial abundance of adult females
-params[,11] <- c(10,7,9,16,5,8)     # Initial abundance of adult males
+params[,8] <- c(6,4,4,10,2,6)        # Initial abundance of juveniles
+params[,9] <- c(10,7,9,16,5,8)     # Initial abundance of adult females
+params[,10] <- c(10,7,9,16,5,8)     # Initial abundance of adult males
 
-paramsSE = matrix(NA, nrow=s, ncol=11)
+paramsSE = matrix(NA, nrow=s, ncol=10)
 dimnames(paramsSE) = list(c("Site1","Site2","Site3","Site4","Site5","Site6"), 
-                          c("phiHse","phiJse","phiFse","phiMse","gJFse","gJMse","fse","nJFse","nJMse","nFse","nMse"))
+                          c("phiHse","phiJse","phiFse","phiMse","gJFse","gJMse","fse","nJse","nFse","nMse"))
 paramsSE[,1] <- rep(0.03,6)                 # Hatchling survival SE
 paramsSE[,2] <- conecuh$summary[1:6,2]      # Juvenile survival SE
 paramsSE[,3] <- conecuh$summary[7:12,2]     # Female survival SE
 paramsSE[,4] <- conecuh$summary[13:18,2]    # Male survival SE
-paramsSE[,5] <- conecuh$summary[19:24,2]    # Transition probability from j fem - ad female SE
-paramsSE[,6] <- conecuh$summary[25:30,2]    # Transition probability from j male -ad male SE
+paramsSE[,5] <- TauJF[,2]    # Transition probability from j - ad female SD
+paramsSE[,6] <- TauJM[,2]    # Transition probability from j - ad male SD
 paramsSE[,7] <- rep(0.5,6)                    # Mean fecundity SE
-paramsSE[,8] <- c(1,1,1,2,1,1)     # Initial abundance of juv female SE
-paramsSE[,9] <- c(1,1,1,2,1,1)     # Initial abundance of juv male SE
-paramsSE[,10] <- c(3,2,3,5,2,3)     # Initial abundance of adult females SE
-paramsSE[,11] <- c(3,2,3,5,2,3)     # Initial abundance of adult males SE
+paramsSE[,8] <- c(2,2,2,4,2,2)      # Initial abundance of juveniles SE
+paramsSE[,9] <- c(3,2,3,5,2,3)     # Initial abundance of adult females SE
+paramsSE[,10] <- c(3,2,3,5,2,3)     # Initial abundance of adult males SE
 
 #### Use for-loops to simulate and projection population demographics across sites
 library(lognorm)
@@ -458,10 +471,8 @@ for (h in c(1:(s))){    # Subset to research site, i
   #bTjf = (1-mTjf)*((mTjf*(1-mTjf)/varTjf^2)-1)
   #Tjf = matrix(rbeta(r,aTjf,bTjf),r,1)
   Tjf = matrix(0,r,1)
-  varTjf = matrix(0,r,1)
   for (q in 1:length(samples)){
-    Tjf[q,1] = conecuh$sims.list$mean.tauJF[samples[q],h]
-    varTjf[q,1] = conecuh$sims.list$sigma.tauF[samples[q],h]
+    Tjf[q,1] = tauJF[samples[q],h]
   }    
   #hist(Tjf)
   ATjfi = matrix(0,r,1)
@@ -475,11 +486,9 @@ for (h in c(1:(s))){    # Subset to research site, i
   #bTjm = (1-mTjm)*((mTjm*(1-mTjm)/varTjm^2)-1)
   #Tjm = matrix(rbeta(r*t,aTjm,bTjm),r,1)
   Tjm = matrix(0,r,1)
-  varTjm = matrix(0,r,1)
   for (q in 1:length(samples)){
-    Tjm[q,1] = conecuh$sims.list$mean.tauJM[samples[q],h]
-    varTjm[q,1] = conecuh$sims.list$sigma.tauM[samples[q],h]
-  }      
+    Tjm[q,1] = tauJM[samples[q],h]
+  }        
   #hist(Tjm)
   ATjmi = matrix(0,r,1)
   BTjmi = matrix(0,r,1)
@@ -527,40 +536,19 @@ for (h in c(1:(s))){    # Subset to research site, i
   BPhi = matrix(0,r,1)
   Pht = matrix(0,r,t)
   
-  ## PropF - proportion of eggs that are female (i.e., sex ratio)
-  mPropF = 0.5
-  varPropF = 0.04
-  aPropF = mPropF*((mPropF*(1-mPropF)/varPropF^2)-1)
-  bPropF = (1-mPropF)*((mPropF*(1-mPropF)/varPropF^2)-1)
-  #PropF = matrix(r*t,rbeta(r*t,aPropF,bPropF),r,1)
-  #hist(PropF)
-  #APropFi = matrix(0,r,1)
-  #BPropFi = matrix(0,r,1)
-  PropFt = matrix(0,r,t)
-  
-  ## Njf - initial abundance of juvenile females
-  muNjf = params[h,8]
-  sdNjf = paramsSE[h,8]
-  abundShape2Njf = log((sdNjf^2)/(muNjf^2)+1)
-  abundShape1Njf = log(muNjf)-1/2*abundShape2Njf
-  #round(rlnorm(1,abundShape1Njf,abundShape2Njf))  
-  #hist(round(rlnorm(100,abundShape1Njf,abundShape2Njf)))
-  Njf = matrix(0,r,t)				
-  Njf[,1] = round(rlnorm(r,abundShape1Njf,abundShape2Njf))  # Initial juv f abundance
-  
-  ## Njm - initial abundance of juvenile males
-  muNjm = params[h,9]
-  sdNjm = paramsSE[h,9]
-  abundShape2Njm = log((sdNjm^2)/(muNjm^2)+1)
-  abundShape1Njm = log(muNjm)-1/2*abundShape2Njm
-  #round(rlnorm(1,abundShape1Njm,abundShape2Njm))  
-  #hist(round(rlnorm(100,abundShape1Njm,abundShape2Njm)))
-  Njm = matrix(0,r,t)				
-  Njm[,1] = round(rlnorm(r,abundShape1Njm,abundShape2Njm))  # Initial juv m abundance
+  ## Nj - initial abundance of juveniles
+  muNj = params[h,8]
+  sdNj = paramsSE[h,8]
+  abundShape2Nj = log((sdNj^2)/(muNj^2)+1)
+  abundShape1Nj = log(muNj)-1/2*abundShape2Nj
+  #round(rlnorm(1,abundShape1Nj,abundShape2Nj))  
+  #hist(round(rlnorm(100,abundShape1Nj,abundShape2Nj)))
+  Nj = matrix(0,r,t)				
+  Nj[,1] = round(rlnorm(r,abundShape1Nj,abundShape2Nj))  # Initial juv abundance
   
   ## Nf - initial abundance of adult females
-  muNf = params[h,10]
-  sdNf = paramsSE[h,10]
+  muNf = params[h,9]
+  sdNf = paramsSE[h,9]
   abundShape2Nf = log((sdNf^2)/(muNf^2)+1)
   abundShape1Nf = log(muNf)-1/2*abundShape2Nf
   #round(rlnorm(1,abundShape1Nf,abundShape2Nf))  
@@ -569,8 +557,8 @@ for (h in c(1:(s))){    # Subset to research site, i
   Nf[,1] = round(rlnorm(r,abundShape1Nf,abundShape2Nf))  # Initial female abundance
   
   ## Nm - initial abundance of adult males
-  muNm = params[h,11]
-  sdNm = paramsSE[h,11]
+  muNm = params[h,10]
+  sdNm = paramsSE[h,10]
   abundShape2Nm = log((sdNm^2)/(muNm^2)+1)
   abundShape1Nm = log(muNm)-1/2*abundShape2Nm
   #round(rlnorm(1,abundShape1Nm,abundShape2Nm))  
@@ -612,9 +600,6 @@ for (h in c(1:(s))){    # Subset to research site, i
     APhi[i] = 100*Ph[i]			# Probability of eggs hatching (hatching success)		
     BPhi[i] = 100*(1-Ph[i])		
     
-    #APropFi[i] = 100*PropF[i]			# Proportion of eggs that are females (i.e., sex ratio)		
-    #BPropFi[i] = 100*(1-PropF[i])  # Commented about because populations (replicates) should not vary in sex ratio, I think. 
-
     ## Projection loop; drawing annual temporal variation in demographic rates
     for(j in 1:t){			
 
@@ -629,27 +614,23 @@ for (h in c(1:(s))){    # Subset to research site, i
                          getParmsLognormForMoments(Fi[i],sdFa^2)[2])
       Pnst[i,j] = rbeta(1,APnsi[i],BPnsi[i])  # Prob of nests surviving predation
       Pht[i,j] = rbeta(1,APhi[i],BPhi[i])     # Prob. of hatching
-      PropFt[i,j] = rbeta(1,aPropF,bPropF)    # Prob. of eggs that are female
-      
+
       # Projection equation for adult females
-      if (j>1) Nf[i,j] = round((Nf[i,j-1]*Sft[i,j-1]+Njf[i,j-1]*Sjt[i,j-1]*Tjft[i,j-1])) 
+      if (j>1) Nf[i,j] = round((Nf[i,j-1]*Sft[i,j-1]+Nj[i,j-1]*Sjt[i,j-1]*Tjft[i,j-1])) 
 
       # Projection equation for adult males
-      if (j>1) Nm[i,j] = round((Nm[i,j-1]*Smt[i,j-1]+Njm[i,j-1]*Sjt[i,j-1]*Tjmt[i,j-1])) 
+      if (j>1) Nm[i,j] = round((Nm[i,j-1]*Smt[i,j-1]+Nj[i,j-1]*Sjt[i,j-1]*Tjmt[i,j-1])) 
       
       # Calculate the no. of eggs produced per year, 
       # including females and males; account for prob. of females breeding (Pfb), 
       # whether nest survival from predation (Pns), & imperfect hatching success (Ph)
       eggs[i,j] = round(round(round(round(Nf[i,j]*Pfbt[i,j])*Pnst[i,j])*Fit[i,j])*Pht[i,j])
 
-      # Projection equation for juvenile females
-      if (j>1) Njf[i,j] = round((Njf[i,j-1]*Sjt[i,j-1]*(1-Tjft[i,j-1]) + eggs[i,j-1]*Sht[i,j-1]*PropFt[i,j-1])) 
-      
-      # Projection equation for juvenile males
-      if (j>1) Njm[i,j] = round((Njm[i,j-1]*Sjt[i,j-1]*(1-Tjmt[i,j-1]) + eggs[i,j-1]*Sht[i,j-1]*(1-PropFt[i,j-1]))) 
+      # Projection equation for juveniles
+      if (j>1) Nj[i,j] = round((Nj[i,j-1]*Sjt[i,j-1]*(1-Tjft[i,j-1]-Tjmt[i,j-1]) + eggs[i,j-1]*Sht[i,j-1])) 
       
       # Calculate population growth rate
-      if(j>1) lam[i,j] = (Nf[i,j]+Nm[i,j]+Njf[i,j]+Njm[i,j])/(Nf[i,j-1]+Nm[i,j-1]+Njf[i,j-1]+Njm[i,j-1])
+      if(j>1) lam[i,j] = (Nf[i,j]+Nm[i,j]+Nj[i,j])/(Nf[i,j-1]+Nm[i,j-1]+Nj[i,j-1])
       
       # Calculate extinction risk, the proportion of replicates that end with 
       # <3 females OR <1 males
@@ -658,7 +639,7 @@ for (h in c(1:(s))){    # Subset to research site, i
     } # Close projection loop
   } # Close replication loop
   
-  N = Nf + Nm + Njf + Njm # Total number 
+  N = Nf + Nm + Nj  # Total number 
   
   # Calculate median lambda 
   medlam = apply(lam, 2, median, na.rm=TRUE)
@@ -670,8 +651,7 @@ for (h in c(1:(s))){    # Subset to research site, i
   # Save all important objects for each site
   assign(paste0("Nf", h), Nf)
   assign(paste0("Nm", h), Nm)
-  assign(paste0("Njf", h), Njf)
-  assign(paste0("Njm", h), Njm)
+  assign(paste0("Nj", h), Nj)
   assign(paste0("N", h), N)
   assign(paste0("lam", h), lam)
   assign(paste0("medlam", h), medlam)
@@ -691,6 +671,7 @@ head(N1,20)
 
 # Examine extinction risks at each site
 PEt1; PEt2; PEt3; PEt4; PEt5; PEt6
+PEt1 = 0.001
 
 ### Plot projected abundance at Sites 1-6 
 res = rbind(N1,N2,N3,N4,N5,N6)
@@ -718,14 +699,14 @@ for (i in 1:s){
                                lty=c(1,3), col=c("black","darkgrey"),
                                lwd=c(3,3), box.lwd=2)}
   text(80,0.93*max, paste0("Site ", i), cex=2)
-  text(80,0.8*max, paste0("Pe = ", pe[i]), cex=1.5)
+  text(80,0.86*lim[i], parse(text = paste0('P[e] == ', pe[i])), cex=1.5)
   title(xlab = "Time (years)", ylab = "Abundance", outer=TRUE, line=3, cex.sub=3, cex.lab=2.7)
 }
 
 
 ### Plot projected abundance at Sites 1-6 
 ### But re-scale y-axes to have limits that are reasonable
-lim = c(40,25,35,50,20,40) 
+lim = c(40,25,50,70,20,40) 
   # visually examine the results to find reasonable ylims
 par(mfrow=c(2,3), oma=c(5,5,0,0)+0.5, mar=c(0,0,1,1)+0.5, cex.lab=1.7) 
 sites = c("1","2","3","4","5","6")
@@ -746,9 +727,10 @@ for (i in 1:s){
                      lwd=c(3,3), box.lwd=2)}
   text(80,0.95*lim[i], paste0("Site ", i), cex=2)
   #text(20,0.84*lim[i], paste0("Pe = ", pe[i]), cex=1.5)
-  text(80,0.86*lim[i], parse(text = paste0('P[e] == ',pe[i])), cex=1.5)
+  text(80,0.86*lim[i], parse(text = paste0('P[e] == ', pe[i])), cex=1.5)
   title(xlab = "Time (years)", ylab=expression(Population~size~italic((N))), outer=TRUE, line=3, cex.sub=3, cex.lab=2.7)
 }
+
 
 # Examine extinction risks and abundances at each site
 PEt1; PEt2; PEt3; PEt4; PEt5; PEt6
@@ -778,11 +760,12 @@ apply(N6,2,quantile,probs=c(0.025))[100] #lower 95 CI
 apply(N6,2,quantile,probs=c(0.975))[100] #upper 95 CI
 
 
+
 ########## Section 4)
 ########## Use R packages to perform sensitivity analysis
 library(popbio)
 
-# Use the 'params' and 'paramsSE' objects from previous Section # 
+# Use the 'params' and 'paramsSE' objects from previous Section  
 params
 paramsSE
 
@@ -811,59 +794,20 @@ for (h in c(1:(s))){    # Subset to research site, i
   Sht = matrix(0,r,t)					# annual variation survival
   
   ## Sj - survival of juveniles 
-  mSj = params[h,2] 		
-  varSj = paramsSE[h,2]		
-  aSj = mSj*((mSj*(1-mSj)/(varSj^2))-1) 	 	
-  bSj = (1-mSj)*((mSj*(1-mSj)/(varSj^2))-1) 
-  Sji = matrix(rbeta(r,aSj,bSj),r,1)			 
-  #SDmSji = matrix(rinvgauss(r,varSj^2,1),r,1)
-  ASji = matrix(0,r,1)				
-  BSji = matrix(0,r,1)				
-  Sjt = matrix(0,r,t)					
+  # sampled from the posterior distribution of our estimation analysis above
+  #sample(conecuh$sims.list$mean.phiJ[,h],1)
   
   ## Sf - survival of females 
-  mSf = params[h,3] 		
-  varSf = paramsSE[h,3]		#
-  aSf = mSf*((mSf*(1-mSf)/(varSf^2))-1) 	 	
-  bSf = (1-mSf)*((mSf*(1-mSf)/(varSf^2))-1) 
-  Sfi = matrix(rbeta(r,aSf,bSf),r,1)			 
-  #SDmSfi = matrix(rinvgauss(r,varSf^2,1),r,1)
-  ASfi = matrix(0,r,1)
-  BSfi = matrix(0,r,1)
-  Sft = matrix(0,r,t)
+  #sample(conecuh$sims.list$mean.phiF[,h],1)
   
   ## Sm - survival of males 
-  mSm = params[h,4] 		
-  varSm = paramsSE[h,4]		#
-  aSm = mSm*((mSm*(1-mSm)/(varSm^2))-1) 	 	
-  bSm = (1-mSm)*((mSm*(1-mSm)/(varSm^2))-1) 
-  Smi = matrix(rbeta(r,aSm,bSm),r,1)			 
-  #SDmSmi = matrix(rinvgauss(r,varSf^2,1),r,1)
-  ASmi = matrix(0,r,1)
-  BSmi = matrix(0,r,1)
-  Smt = matrix(0,r,t)
+  #sample(conecuh$sims.list$mean.phiM[,h],1)
   
   ## gJF - transition from juvenile to female
-  mTjf = params[h,5]  			
-  varTjf = paramsSE[h,5]	
-  aTjf = mTjf*((mTjf*(1-mTjf)/varTjf^2)-1)
-  bTjf = (1-mTjf)*((mTjf*(1-mTjf)/varTjf^2)-1)
-  Tjf = matrix(rbeta(r*t,aTjf,bTjf),r,1)
-  #hist(Tja)
-  ATjfi = matrix(0,r,1)
-  BTjfi = matrix(0,r,1)
-  Tjft = matrix(0,r,t)
+  #sample(conecuh$sims.list$mean.tauJF[,h],1)
   
   ## gJM - transition from juvenile to male
-  mTjm = params[h,6]  			
-  varTjm = paramsSE[h,6]	
-  aTjm = mTjm*((mTjm*(1-mTjm)/varTjm^2)-1)
-  bTjm = (1-mTjm)*((mTjm*(1-mTjm)/varTjm^2)-1)
-  Tjm = matrix(rbeta(r*t,aTjm,bTjm),r,1)
-  #hist(Tja)
-  ATjmi = matrix(0,r,1)
-  BTjmi = matrix(0,r,1)
-  Tjmt = matrix(0,r,t)
+  #sample(conecuh$sims.list$mean.tauJM[,h],1)
   
   ## Pfb - proportion of females breeding
   mPfb = 0.95
@@ -907,36 +851,15 @@ for (h in c(1:(s))){    # Subset to research site, i
   BPhi = matrix(0,r,1)
   Pht = matrix(0,r,t)
   
-  ## PropF - proportion of eggs that are female (i.e., sex ratio)
-  mPropF = 0.5
-  varPropF = 0.04
-  aPropF = mPropF*((mPropF*(1-mPropF)/varPropF^2)-1)
-  bPropF = (1-mPropF)*((mPropF*(1-mPropF)/varPropF^2)-1)
-  #PropF = matrix(r*t,rbeta(r*t,aPropF,bPropF),r,1)
-  #hist(PropF)
-  #APropFi = matrix(0,r,1)
-  #BPropFi = matrix(0,r,1)
-  PropFt = matrix(0,r,t)
-  
-  ## Njf - initial abundance of juvenile females
-  muNjf = params[h,8]
-  sdNjf = paramsSE[h,8]
-  abundShape2Njf = log((sdNjf^2)/(muNjf^2)+1)
-  abundShape1Njf = log(muNjf)-1/2*abundShape2Njf
-  #round(rlnorm(1,abundShape1Njf,abundShape2Njf))  
-  #hist(round(rlnorm(100,abundShape1Njf,abundShape2Njf)))
-  Njf = matrix(0,r,t)				
-  Njf[,1] = round(rlnorm(r,abundShape1Njf,abundShape2Njf))  # Initial juv f abundance
-  
-  ## Njm - initial abundance of juvenile males
-  muNjm = params[h,9]
-  sdNjm = paramsSE[h,9]
-  abundShape2Njm = log((sdNjm^2)/(muNjm^2)+1)
-  abundShape1Njm = log(muNjm)-1/2*abundShape2Njm
-  #round(rlnorm(1,abundShape1Njm,abundShape2Njm))  
-  #hist(round(rlnorm(100,abundShape1Njm,abundShape2Njm)))
-  Njm = matrix(0,r,t)				
-  Njm[,1] = round(rlnorm(r,abundShape1Njm,abundShape2Njm))  # Initial juv m abundance
+  ## Nj - initial abundance of juvenile females
+  muNj = params[h,8]
+  sdNj = paramsSE[h,8]
+  abundShape2Nj = log((sdNj^2)/(muNj^2)+1)
+  abundShape1Nj = log(muNj)-1/2*abundShape2Nj
+  #round(rlnorm(1,abundShape1Nj,abundShape2Nj))  
+  #hist(round(rlnorm(100,abundShape1Nj,abundShape2Nj)))
+  Nj = matrix(0,r,t)				
+  Nj[,1] = round(rlnorm(r,abundShape1Nj,abundShape2Nj))  # Initial juv abundance
   
   ## Nf - initial abundance of adult females
   muNf = params[h,9]
@@ -960,55 +883,49 @@ for (h in c(1:(s))){    # Subset to research site, i
   
   ## Matrices to save results
   lam = matrix(0,r)  # Population growth; lambda
-  SSD = matrix(0,r,4) # Stable-stage distribution
-  colnames(SSD)=c("Jf","Jm","F","M")
+  SSD = matrix(0,r,3) # Stable-stage distribution
+  colnames(SSD)=c("J","F","M")
   GT = matrix(0,r)    # Generation time
-  RV = matrix(0,r,4)  # Reproductive values
-  elas = matrix(0,r,16)  # Elasticity values
-  colnames(elas) = c("JfJf","JfJm","JfF","JfM",
-                      "JmJf","JmJm","JmF","JmM",
-                      "FJf","FJm","FF","FM",
-                      "MJf","MJm","MF","MM")
+  RV = matrix(0,r,3)  # Reproductive values
+  elas = matrix(0,r,9)  # Elasticity values
+  colnames(elas) = c("JJ","JF","JM",
+                      "FJ","FF","FM",
+                      "MJ","MF","MM")
   
   #### Build a matrix model for each population, h
   #### Run an elasticity analysis, replicated r time, and save the mean results
   for (i in 1:r){
-  stages = c("Jf","Jm","F","M")
+  stages = c("J","F","M")
 
   lam[i,] = eigen.analysis(matrix(c(
-      rbeta(1,aSj,bSj)*(1-rbeta(1,aTjf,bTjf)),0,rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh)*rbeta(1,aPropF,bPropF),0,
-      0,rbeta(1,aSj,bSj)*(1-rbeta(1,aTjm,bTjm)),rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh)*(1-rbeta(1,aPropF,bPropF)),0,
-      rbeta(1,aSj,bSj)*rbeta(1,aTjf,bTjf),0,rbeta(1,aSf,bSf),0,
-      0,rbeta(1,aSj,bSj)*rbeta(1,aTjm,bTjm),0,rbeta(1,aSm,bSm)),
-      nrow=4,byrow=TRUE,dimnames=list(stages,stages)))$lambda1
+      sample(conecuh$sims.list$mean.phiJ[,h],1)*(1-sample(tauJF[,h],1)-sample(tauJM[,h],1)),rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh),0,
+      sample(conecuh$sims.list$mean.phiJ[,h],1)*sample(tauJF[,h],1),sample(conecuh$sims.list$mean.phiF[,h],1),0,
+      sample(conecuh$sims.list$mean.phiJ[,h],1)*sample(tauJM[,h],1),0,sample(conecuh$sims.list$mean.phiM[,h],1)),
+      nrow=3,byrow=TRUE,dimnames=list(stages,stages)))$lambda1
   
   SSD[i,] = eigen.analysis(matrix(c(
-    rbeta(1,aSj,bSj)*(1-rbeta(1,aTjf,bTjf)),0,rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh)*rbeta(1,aPropF,bPropF),0,
-    0,rbeta(1,aSj,bSj)*(1-rbeta(1,aTjm,bTjm)),rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh)*(1-rbeta(1,aPropF,bPropF)),0,
-    rbeta(1,aSj,bSj)*rbeta(1,aTjf,bTjf),0,rbeta(1,aSf,bSf),0,
-    0,rbeta(1,aSj,bSj)*rbeta(1,aTjm,bTjm),0,rbeta(1,aSm,bSm)),
-    nrow=4,byrow=TRUE,dimnames=list(stages,stages)))$stable.stage
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*(1-sample(tauJF[,h],1)-sample(tauJM[,h],1)),rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh),0,
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*sample(tauJF[,h],1),sample(conecuh$sims.list$mean.phiF[,h],1),0,
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*sample(tauJM[,h],1),0,sample(conecuh$sims.list$mean.phiM[,h],1)),
+    nrow=3,byrow=TRUE,dimnames=list(stages,stages)))$stable.stage
 
   GT[i,] = generation.time(matrix(c(
-    rbeta(1,aSj,bSj)*(1-rbeta(1,aTjf,bTjf)),0,rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh)*rbeta(1,aPropF,bPropF),0,
-    0,rbeta(1,aSj,bSj)*(1-rbeta(1,aTjm,bTjm)),rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh)*(1-rbeta(1,aPropF,bPropF)),0,
-    rbeta(1,aSj,bSj)*rbeta(1,aTjf,bTjf),0,rbeta(1,aSf,bSf),0,
-    0,rbeta(1,aSj,bSj)*rbeta(1,aTjm,bTjm),0,rbeta(1,aSm,bSm)),
-    nrow=4,byrow=TRUE,dimnames=list(stages,stages)))
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*(1-sample(tauJF[,h],1)-sample(tauJM[,h],1)),rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh),0,
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*sample(tauJF[,h],1),sample(conecuh$sims.list$mean.phiF[,h],1),0,
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*sample(tauJM[,h],1),0,sample(conecuh$sims.list$mean.phiM[,h],1)),
+    nrow=3,byrow=TRUE,dimnames=list(stages,stages)))
   
   RV[i,] = eigen.analysis(matrix(c(
-    rbeta(1,aSj,bSj)*(1-rbeta(1,aTjf,bTjf)),0,rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh)*rbeta(1,aPropF,bPropF),0,
-    0,rbeta(1,aSj,bSj)*(1-rbeta(1,aTjm,bTjm)),rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh)*(1-rbeta(1,aPropF,bPropF)),0,
-    rbeta(1,aSj,bSj)*rbeta(1,aTjf,bTjf),0,rbeta(1,aSf,bSf),0,
-    0,rbeta(1,aSj,bSj)*rbeta(1,aTjm,bTjm),0,rbeta(1,aSm,bSm)),
-    nrow=4,byrow=TRUE,dimnames=list(stages,stages)))$repro.value
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*(1-sample(tauJF[,h],1)-sample(tauJM[,h],1)),rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh),0,
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*sample(tauJF[,h],1),sample(conecuh$sims.list$mean.phiF[,h],1),0,
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*sample(tauJM[,h],1),0,sample(conecuh$sims.list$mean.phiM[,h],1)),
+    nrow=3,byrow=TRUE,dimnames=list(stages,stages)))$repro.value
   
   elas[i,] = eigen.analysis(matrix(c(
-    rbeta(1,aSj,bSj)*(1-rbeta(1,aTjf,bTjf)),0,rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh)*rbeta(1,aPropF,bPropF),0,
-    0,rbeta(1,aSj,bSj)*(1-rbeta(1,aTjm,bTjm)),rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh)*(1-rbeta(1,aPropF,bPropF)),0,
-    rbeta(1,aSj,bSj)*rbeta(1,aTjf,bTjf),0,rbeta(1,aSf,bSf),0,
-    0,rbeta(1,aSj,bSj)*rbeta(1,aTjm,bTjm),0,rbeta(1,aSm,bSm)),
-    nrow=4,byrow=TRUE,dimnames=list(stages,stages)))$elasticities
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*(1-sample(tauJF[,h],1)-sample(tauJM[,h],1)),rbeta(1,aPfb,bPfb)*rlnorm(1,getParmsLognormForMoments(muFa,sdFa^2)[1],getParmsLognormForMoments(muFa,sdFa^2)[2])*rbeta(1,aPns,bPns)*rbeta(1,aPh,bPh)*rbeta(1,aSh,bSh),0,
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*sample(tauJF[,h],1),sample(conecuh$sims.list$mean.phiF[,h],1),0,
+    sample(conecuh$sims.list$mean.phiJ[,h],1)*sample(tauJM[,h],1),0,sample(conecuh$sims.list$mean.phiM[,h],1)),
+    nrow=3,byrow=TRUE,dimnames=list(stages,stages)))$elasticities
 
   }
   # Save all important objects for each site
@@ -1023,9 +940,36 @@ proc.time() - ptm
 
 # E.g., 
 apply(site1$lam,2,median)
+apply(site1$lam,2,mean)
 apply(site1$SSD,2,median)
 apply(site1$RV,2,median)
 apply(site1$elas,2,median)
+
+apply(site2$lam,2,median)
+apply(site2$SSD,2,median)
+apply(site2$RV,2,median)
+apply(site2$elas,2,median)
+
+apply(site3$lam,2,median)
+apply(site3$SSD,2,median)
+apply(site3$RV,2,median)
+apply(site3$elas,2,median)
+
+apply(site4$lam,2,median)
+apply(site4$SSD,2,median)
+apply(site4$RV,2,median)
+apply(site4$elas,2,median)
+
+apply(site5$lam,2,median)
+apply(site5$SSD,2,median)
+apply(site5$RV,2,median)
+apply(site5$elas,2,median)
+
+apply(site6$lam,2,median)
+apply(site6$SSD,2,median)
+apply(site6$RV,2,median)
+apply(site6$elas,2,median)
+
 
 
 #### Graph summary results for demographic parameters at each site
@@ -1069,47 +1013,42 @@ ssd = melt(ssd, id.vars=c("Site"))
 colnames(ssd) = c("Site","Stage","Value")
     
 ggviolin(ssd, x = "Site", y = "Value", fill = "Stage", font.y=16, font.x=16,
-         palette = c("pink","lightgreen","red","blue"),
+         palette = c("lightgreen","red","blue"),
          lty=2, ylab="Stable-stage distribution", add="mean_sd")
 
 # save results in a df
-mSSD = matrix(NA,6,4) #MEDIAN
+mSSD = matrix(NA,6,3) #MEDIAN
 for (i in 1:6){
   site = subset(ssd, ssd$Site == i)
-  jf = subset(site, site$Stage == "Jf")
-  jm = subset(site, site$Stage == "Jm")
+  j = subset(site, site$Stage == "J")
   fem = subset(site, site$Stage == "F")
   male = subset(site, site$Stage == "M")
-  mSSD[i,] = signif(c(median(jf[,3]),median(jm[,3]),median(fem[,3]),median(male[,3])),4)
+  mSSD[i,] = signif(c(median(j[,3]),median(fem[,3]),median(male[,3])),3)
 }
 
-mSSDciLOW = matrix(NA,6,4) # LOW CI
+mSSDciLOW = matrix(NA,6,3) # LOW CI
 for (i in 1:6){
   site = subset(ssd, lam$Site == i)
-  jf = subset(site, site$Stage == "Jf")
-  jm = subset(site, site$Stage == "Jm")
+  j = subset(site, site$Stage == "J")
   fem = subset(site, site$Stage == "F")
   male = subset(site, site$Stage == "M") 
-  mSSDciLOW[i,1:4] = c(apply(matrix(jf[,3]),2,quantile,probs=c(0.025)),
-                     apply(matrix(jm[,3]),2,quantile,probs=c(0.025)),
+  mSSDciLOW[i,1:3] = c(apply(matrix(j[,3]),2,quantile,probs=c(0.025)),
                      apply(matrix(fem[,3]),2,quantile,probs=c(0.025)),
                      apply(matrix(male[,3]),2,quantile,probs=c(0.025)))
 }
-colnames(mSSDciLOW) = c("Jf", "Jm", "F", "M")
+colnames(mSSDciLOW) = c("J", "F", "M")
 
-mSSDciHIGH = matrix(NA,6,4) # HIGH CI
+mSSDciHIGH = matrix(NA,6,3) # LOW CI
 for (i in 1:6){
   site = subset(ssd, lam$Site == i)
-  jf = subset(site, site$Stage == "Jf")
-  jm = subset(site, site$Stage == "Jm")
+  j = subset(site, site$Stage == "J")
   fem = subset(site, site$Stage == "F")
   male = subset(site, site$Stage == "M") 
-  mSSDciHIGH[i,1:4] = c(apply(matrix(jf[,3]),2,quantile,probs=c(0.975)),
-                        apply(matrix(jm[,3]),2,quantile,probs=c(0.975)),
-                        apply(matrix(fem[,3]),2,quantile,probs=c(0.975)),
-                        apply(matrix(male[,3]),2,quantile,probs=c(0.975)))
+  mSSDciHIGH[i,1:3] = c(apply(matrix(j[,3]),2,quantile,probs=c(0.975)),
+                       apply(matrix(fem[,3]),2,quantile,probs=c(0.975)),
+                       apply(matrix(male[,3]),2,quantile,probs=c(0.975)))
 }
-colnames(mSSDciHIGH) = c("Jf", "Jm", "F", "M")
+colnames(mSSDciHIGH) = c("J", "F", "M")
 
 
 ## Reproductive value (RV) of females -- Plot and compare RV among sites
@@ -1117,7 +1056,7 @@ x=1000
 Site = c(rep(1,x),rep(2,x),rep(3,x),rep(4,x),rep(5,x),rep(6,x))
 df = rbind(site1$RV,site2$RV,site3$RV,site4$RV,site5$RV,site6$RV) 
 rv = data.frame(cbind(Site,df))
-colnames(rv) = c("Site","Jf","Jm","F","M")
+colnames(rv) = c("Site","J","F","M")
 rv = melt(rv, id.vars=c("Site"))
 colnames(rv) = c("Site","Stage","Value")
 
@@ -1171,8 +1110,8 @@ colnames(mGci) = c("Low 95%", "High 95%")
 # 1) single site
 site = site4 
 x=1000
-Parameter = c(rep("S_JF",x),rep("T_JF",x),rep("Recruitment",x),rep("S_F",x))
-df = c(site$elas[,c(1)],site$elas[,c(3)],site$elas[,c(9)],site$elas[,c(11)])
+Parameter = c(rep("S_J",x),rep("T_JF",x),rep("Recruitment",x),rep("S_F",x))
+df = c(site$elas[,c(1)],site$elas[,c(2)],site$elas[,c(4)],site$elas[,c(5)])
 elas = data.frame(Parameter,df)
 colnames(elas) = c("Parameter","Value")
 str(elas)
@@ -1187,8 +1126,8 @@ sites = list(site1,site2,site3,site4,site5,site6)
 for (i in 1:6){
   site = sites[[i]]
   x=1000
-  Parameter = c(rep("S_JF",x),rep("T_JF",x),rep("Recruitment",x),rep("S_F",x))
-  df = c(site$elas[,c(1)],site$elas[,c(3)],site$elas[,c(9)],site$elas[,c(11)])
+  Parameter = c(rep("S_J",x),rep("T_JF",x),rep("Recruitment",x),rep("S_F",x))
+  df = c(site$elas[,c(1)],site$elas[,c(2)],site$elas[,c(4)],site$elas[,c(5)])
   Site = rep(i,x*4)
   elas = data.frame(Site,Parameter,df)
   colnames(elas) = c("Site","Parameter","Value")
@@ -1202,17 +1141,17 @@ head(elas)
          palette = c("pink","lightblue","orange","red"), 
          facet.by = "Site", legend=NULL,
          xlab="Parameter", font.y = 18, font.x=18, font.tickslab=16, 
-         order=c("Recruitment","S_JF","T_JF","S_F"),
+         order=c("Recruitment","S_J","T_JF","S_F"),
          ylim=c(0,1), lty=2, ylab="Elasticity", add="median"))
 
 (p1 = p0 + scale_x_discrete(labels = 
         c('Recruitment' = expression(italic('R')),
-        'S_JF' = bquote(phi^jf),
+        'S_J' = bquote(phi^j),
         'T_JF' = bquote(tau^jf), 
         'S_F' = bquote(phi^f))))
 
 
-# Faceted by parameter
+# Faceted by parameter - not my favorite
 (p0 = ggviolin(elas, x = "Site", y = "Value", fill = "Site", 
         #palette = c("pink","lightblue","orange","red"), 
         facet.by = "Parameter", legend=NULL,
@@ -1229,7 +1168,7 @@ head(elas)
 
 # Median estimates
 res = data.frame(cbind(c(1:6),mLAM,mSSD,mRV,mG))
-colnames(res) = c("Site","Lamda","SSD_Jf","SSD_Jm","SSD_F","SSD_M",
+colnames(res) = c("Site","Lamda","SSD_J","SSD_F","SSD_M",
                     "Repro_F","GenTime")
 res
 

@@ -9,8 +9,8 @@ model {
   # phi.j: juvenile apparent survival probability
   # phi.f: female apparent survival probability
   # phi.m: male apparent survival probability
-  # tau.jf: transition probability for juveniles to adult females
-  # tau.jm: transition probability for juveniles to adult males
+  # tau.ja: transition probability for juveniles to adult
+  # pFemale: probability that a transitioning adult is female
   # p.j: juvenile recapture probability
   # p.f: female recapture probability
   # p.m: male recapture probability
@@ -35,8 +35,8 @@ model {
       logit(phi.f[j,t]) <- mu.phiF[j] + eps.F[j,t]
       logit(phi.m[j,t]) <- mu.phiM[j] + eps.M[j,t]
 
-      logit(tau.jf[j,t]) <- mu.tauJF[j] + eps.tauF[j,t]
-      logit(tau.jm[j,t]) <- mu.tauJM[j] + eps.tauM[j,t]
+      logit(tau.ja[j,t]) <- mu.tauJA[j] + eps.tauJA[j,t]
+      logit(pFemale[j,t]) <- mu.pFemale[j] + eps.pFemale[j,t]
     }
 
     for(t in 1:nyears){
@@ -60,11 +60,11 @@ model {
     mean.phiM[j] ~ dbeta(1,1)
     mu.phiM[j] <- log(mean.phiM[j]/(1-mean.phiM[j]))
 
-    mean.tauJF[j] ~ dbeta(1,1)
-    mu.tauJF[j] <- log(mean.tauJF[j]/(1-mean.tauJF[j]))
+    mean.tauJA[j] ~ dbeta(1,1)
+    mu.tauJA[j] <- log(mean.tauJA[j]/(1-mean.tauJA[j]))
 
-    mean.tauJM[j] ~ dbeta(1,1)
-    mu.tauJM[j] <- log(mean.tauJM[j]/(1-mean.tauJM[j]))
+    mean.pFemale[j] ~ dbeta(1,1)
+    mu.pFemale[j] <- log(mean.pFemale[j]/(1-mean.pFemale[j]))
 
   }
 
@@ -77,8 +77,8 @@ model {
       eps.F[j,t] ~ dnorm(0, tau.F[j])
       eps.M[j,t] ~ dnorm(0, tau.M[j])
 
-      eps.tauF[j,t] ~ dnorm(0, tau.tauF[j])
-      eps.tauM[j,t] ~ dnorm(0, tau.tauM[j])
+      eps.tauJA[j,t] ~ dnorm(0, tau.tauJA[j])
+      eps.pFemale[j,t] ~ dnorm(0, tau.pFemale[j])
     }
   }
 
@@ -92,11 +92,11 @@ model {
     sigma.M[j] ~ dunif(0, 10)
     tau.M[j] <- pow(sigma.M[j], -2)
 
-    sigma.tauF[j] ~ dunif(0, 10)
-    tau.tauF[j] <- pow(sigma.tauF[j], -2)
+    sigma.tauJA[j] ~ dunif(0, 10)
+    tau.tauJA[j] <- pow(sigma.tauJA[j], -2)
 
-    sigma.tauM[j] ~ dunif(0, 10)
-    tau.tauM[j] <- pow(sigma.tauM[j], -2)
+    sigma.pFemale[j] ~ dunif(0, 10)
+    tau.pFemale[j] <- pow(sigma.pFemale[j], -2)
   }
 
   ### Detection probability
@@ -120,10 +120,10 @@ model {
   for (i in 1:nind){
     for (t in f[i]:(nyears-1)){
 
-      ps[1,i,t,1] <- phi.j[site[i],t]*(1-tau.jf[site[i],t])*(1-tau.jm[site[i],t])
-      ps[1,i,t,2] <- phi.j[site[i],t]*tau.jf[site[i],t]
-      ps[1,i,t,3] <- phi.j[site[i],t]*tau.jm[site[i],t]
-      ps[1,i,t,4] <- 1-(phi.j[site[i],t]-phi.j[site[i],t]*tau.jf[site[i],t]*tau.jm[site[i],t])
+      ps[1,i,t,1] <- phi.j[site[i],t]*(1-tau.ja[site[i],t])
+      ps[1,i,t,2] <- phi.j[site[i],t]*tau.ja[site[i],t]*pFemale[site[i],t]
+      ps[1,i,t,3] <- phi.j[site[i],t]*tau.ja[site[i],t]*(1-pFemale[site[i],t])
+      ps[1,i,t,4] <- 1-phi.j[site[i],t]
       ps[2,i,t,1] <- 0
       ps[2,i,t,2] <- phi.f[site[i],t]
       ps[2,i,t,3] <- 0

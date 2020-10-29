@@ -106,14 +106,11 @@ for(i in 1:length(sites)){
 inits <- function(){list(mean.phiJ=runif(6,0,1), 
                          mean.phiF=runif(6,0,1), 
                          mean.phiM=runif(6,0,1),
-                         mean.tauJF=runif(6,0,1), 
-                         mean.tauJM=runif(6,0,1),
+                         mean.tauJA=runif(6,0,1), 
+                         mean.pFemale=runif(6,0,1),
                          overall.mean.pJ = runif(1, 0, 1),
                          overall.mean.pF = runif(1, 0, 1),
                          overall.mean.pM = runif(1, 0, 1),
-                         # mean.pJ=runif(nyears,0,1), 
-                         # mean.pF=runif(nyears,0,1), 
-                         # mean.pM=runif(nyears,0,1),
                          z = z.inits)} 
 
 # R = prior for variance-covariance matrices (large values on diag = large variances)
@@ -133,10 +130,10 @@ jags.data <- list(y = CH.test,
 )
 
 parameters <- c("mean.phiJ", "mean.phiF", "mean.phiM",
-                "mean.tauJF", "mean.tauJM","mean.pJ", 
-                "mean.pF", "mean.pM", 
+                "mean.tauJA", "mean.pFemale",
+                "mean.pJ", "mean.pF", "mean.pM", 
                 "sigma2.y", "sigma.J", "sigma.F", "sigma.M",
-                "sigma.tauF", "sigma.tauM",
+                "sigma.tauJA", "sigma.pFemale",
                 "beta.site.J", "beta.site.F", "beta.site.M",
                 "beta.site.tauF", "beta.site.tauM")
 
@@ -147,13 +144,14 @@ nc <- 3
 na <- 50000 
 
 
-msCMR <- jags(jags.data, inits, parameters, "multisite-CMR_fixed-site-effects.jags",
-             n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, n.adapt = na, parallel = TRUE)
+msCMR <- jags(jags.data, inits, parameters, "multisite-CMR_fixed-site-effects.jags", 
+              n.chains = nc, n.thin = nt, n.iter = ni, n.burnin = nb, n.adapt = na, parallel = TRUE)
+
 
 #library(beepr)
 #beep(sound=8)
 
-pushover("Multisite CMR done - Macbook Pro", 
+pushover("Multisite CMR done - Carribean", 
          user="ufxwvtmc4jby3zgsetfsya6n8wzmkj", 
          app="asbrmzwsprh7r4isr6pra5itgjeeng")
 
@@ -181,6 +179,45 @@ par(mfrow=c(1,1))
 hist(msCMR$summary[,8])
 length(msCMR$summary[,8])
 length(which(msCMR$summary[,8]< 1.1))
+
+# Explore mean, LCL, UCL for parameter estimates at each site
+msCMR$summary[1:6,c(1,3,7)]   #phiJ 
+msCMR$summary[7:12,c(1,3,7)]  #phiF 
+msCMR$summary[13:18,c(1,3,7)] #phiM
+
+msCMR$summary[19:24,c(1,3,7)]    #tauJA
+msCMR$summary[25:30,c(1,3,7)]    #pFemale
+1-msCMR$summary[25:30,c(1,3,7)]  #pMale
+
+# Create tauJF and tauJM by multiplying tauJA*pFemale and tauJA*(1-pFemale)
+str(msCMR)
+tauJF = msCMR$sims.list$mean.tauJA*msCMR$sims.list$mean.pFemale
+tauJM = msCMR$sims.list$mean.tauJA*(1-msCMR$sims.list$mean.pFemale)
+
+TauJF = matrix(NA,6,3,dimnames=list(c(1:6),c("Mean","LCL","UCL")))
+for (i in 1:6){
+  site = tauJF[,i]
+  TauJF[i,1] = mean(site)
+  TauJF[i,2] = apply(data.frame(site),2,quantile,probs=c(0.025))
+  TauJF[i,3] = apply(data.frame(site),2,quantile,probs=c(0.975))
+}
+
+TauJM = matrix(NA,6,3,dimnames=list(c(1:6),c("Mean","LCL","UCL")))
+for (i in 1:6){
+  site = tauJM[,i]
+  TauJM[i,1] = mean(site)
+  TauJM[i,2] = apply(data.frame(site),2,quantile,probs=c(0.025))
+  TauJM[i,3] = apply(data.frame(site),2,quantile,probs=c(0.975))
+}
+
+
+
+
+
+
+
+
+
 
 
 
